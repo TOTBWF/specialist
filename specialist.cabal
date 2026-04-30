@@ -1,6 +1,6 @@
 cabal-version:      3.4
 name:               specialist
-version:            0.1.0
+version:            0.2.0
 synopsis:           GHC plugin that guides surgical specialization
 description:        This is a GHC plugin that finds and instruments overloaded
                     calls in the source program. The instrumentation, when
@@ -40,6 +40,7 @@ library
       GHC.Specialist.Analysis.Rank
       GHC.Specialist.Analysis.SpecChains
       GHC.Specialist.Analysis.Speedscope
+      GHC.Specialist.CostCentre
       GHC.Specialist.Plugin
       GHC.Specialist.Plugin.Compat
       GHC.Specialist.Plugin.Initialization

@@ -7,6 +7,7 @@
 
 module GHC.Specialist.Plugin.Instrumentation where
 
+import GHC.Specialist.CostCentre
 import GHC.Specialist.Plugin.Types
 
 import Control.Concurrent
@@ -14,7 +15,6 @@ import Control.Monad
 import Data.List
 import Debug.Trace
 import GHC.Exts
-import GHC.Internal.Exts
 import GHC.Exts.Heap
 import GHC.InfoProv
 import GHC.IORef
