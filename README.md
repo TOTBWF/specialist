@@ -1,15 +1,13 @@
 # The specialist GHC plugin
 
-This is a GHC plugin that detects and instruments overloaded function
-applications during compilation. At runtime, the instrumentation emits
-information about the overloaded calls whenever they are evaluated.
+This is a fork of the [specialist](https://github.com/well-typed/specialist) 
+GHC plugin that detects and instruments overloaded function applications during compilation. 
+At runtime, the instrumentation emits information about the overloaded calls whenever they are evaluated.
+
+Unlike the original `specialist`, this fork does not require you to use a patched
+GHC.
 
 ## Usage
-
-> [!IMPORTANT]
-> This plugin relies on several unmerged features in GHC. Use this
-> GHC branch for compatibility:
-> [https://gitlab.haskell.org/ghc/ghc/-/tree/wip/9.10-specialist-compat](https://gitlab.haskell.org/ghc/ghc/-/tree/wip/9.10-specialist-compat).
 
 Add this plugin to `build-depends` and use `-fplugin=GHC.Specialist` on whatever
 modules you wish to instrument. To set a dynamic sample rate for plugin output,
