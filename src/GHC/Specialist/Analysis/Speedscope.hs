@@ -3,13 +3,15 @@ module GHC.Specialist.Analysis.Speedscope where
 import GHC.Specialist
 
 import Data.Aeson
+import Data.Binary qualified as Bin
+import Data.ByteString.Lazy qualified as LBS
+import Data.ByteString.Lazy.Base64 qualified as LBS
 import Data.Maybe
 import Data.List
-import Data.Text qualified as Text
+import Data.Text.Encoding qualified as T
 import GHC.RTS.Events
 import HsSpeedscope
 import System.FilePath
-import Text.Read
 
 speedscope :: Maybe FilePath -> Maybe String -> FilePath -> IO ()
 speedscope mOutFile mDictLoc eventLogFile =
@@ -39,7 +41,7 @@ processEvents mDictLoc elProf (Event _t ei _c) =
         elProf { prof_interval = Just ival }
       HeapProfCostCentre n l m s _ ->
         elProf { cost_centres = CostCentre n l m s : cost_centres elProf }
-      UserMessage msg | Just (SpecialistNote {..}) <- readMaybe (Text.unpack msg) ->
+      UserMessage msg | Right (_, _, SpecialistNote {..}) <- Bin.decodeOrFail (LBS.decodeBase64Lenient $ LBS.fromStrict $ T.encodeUtf8 msg) ->
         let
           newProf =
             elProf

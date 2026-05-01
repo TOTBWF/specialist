@@ -50,12 +50,16 @@ library
       GHC.Specialist.Plugin.Types
   build-depends:
     , aeson
+    , binary
+    , base64
+    , bytestring
     , containers
     , filepath
     , ghc
     , ghc-events
     , ghc-heap
     , ghc-internal
+    , ghc-trace-events
     , hs-speedscope
     , mtl
     , random
@@ -75,11 +79,8 @@ executable specialyze
       Commands.GroupNotes
   build-depends:
     , specialist
-
     , containers
-    , dir-traverse
     , optparse-applicative
-    , text
 
 test-suite test-specialist
   import: common
@@ -96,7 +97,6 @@ test-suite test-specialist
       Test.Specialist.Utils
   build-depends:
       specialist
-
     , directory
     , process
     , tasty

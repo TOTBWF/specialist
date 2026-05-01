@@ -1,6 +1,9 @@
 {-# LANGUAGE StandaloneDeriving #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module GHC.Specialist.Plugin.Types where
 
@@ -8,6 +11,8 @@ import GHC.Specialist.Plugin.Orphans ()
 
 import Control.Monad.Reader
 import Control.Monad.State.Strict
+
+import Data.Binary (Binary)
 import Data.Kind
 -- Only imported for unimplemented DumpSpecInfo tracking
 -- import Data.Map (Map)
@@ -24,6 +29,7 @@ import GHC.Types.CostCentre
 import GHC.Types.CostCentre.State
 -- import GHC.Types.DumpSpecInfo
 import GHC.Types.TyThing
+import GHC.Generics
 
 -------------------------------------------------------------------------------
 -- Instrumentation types
@@ -40,7 +46,8 @@ data SpecialistNote =
       , specialistNoteLocationSpan :: String
       , specialistNoteThreadId :: !Word32
       }
-  deriving (Show, Read, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass Binary
 
 prettySpecialistNote :: SpecialistNote -> String
 prettySpecialistNote SpecialistNote{..} =
@@ -75,7 +82,8 @@ data DictInfo =
         { dictInfoType :: String
         , dictInfoClosure :: DictClosure
         }
-  deriving (Show, Read, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass Binary
 
 prettyDictInfo :: DictInfo -> String
 prettyDictInfo (DictInfo t c) =
@@ -90,7 +98,8 @@ data DictClosure =
         -- | Shown 'GHC.Heap.Exts.Closure'
         String
 
-  deriving (Show, Read, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass Binary
 
 dictClosureIpe :: DictClosure -> Maybe InfoProv
 dictClosureIpe =
@@ -147,7 +156,7 @@ newtype SpecialistT m a =
     SpecialistT
       { runSpecialistT :: ReaderT SpecialistEnv (StateT SpecialistState m) a
       }
-  deriving
+  deriving newtype
     ( Functor
     , Applicative
     , Monad
@@ -155,7 +164,7 @@ newtype SpecialistT m a =
     , MonadState SpecialistState
     )
 
-deriving instance (MonadIO m) => MonadIO (SpecialistT m)
+deriving newtype instance (MonadIO m) => MonadIO (SpecialistT m)
 
 instance MonadTrans SpecialistT where
   lift act = SpecialistT (lift $ lift act)

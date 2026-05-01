@@ -2,18 +2,32 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ImpredicativeTypes  #-}
 {-# LANGUAGE MagicHash           #-}
+{-# LANGUAGE UnboxedTuples       #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant <$>" #-}
+{-# LANGUAGE BlockArguments #-}
 
 module GHC.Specialist.Plugin.Instrumentation where
 
 import GHC.Specialist.CostCentre
 import GHC.Specialist.Plugin.Types
 
+import GHC.IO.Handle.Text
+import GHC.IO.StdHandles qualified as Handles
+
 import Control.Concurrent
 import Control.Monad
+
+import Data.Base64.Types (extractBase64)
+import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as LBS
+import Data.ByteString.Lazy.Base64 qualified as LBS
+import Data.Binary qualified as Bin
 import Data.List
-import Debug.Trace
+import Data.Maybe
+
+import Debug.Trace.ByteString qualified as Trace
+
 import GHC.Exts
 import GHC.Exts.Heap
 import GHC.InfoProv
@@ -21,7 +35,7 @@ import GHC.IORef
 import GHC.IO
 import System.Random
 import Unsafe.Coerce
-import Data.Maybe
+
 
 -- | Put a dictionary in a box
 {-# NOINLINE dictToBox #-}
@@ -146,6 +160,20 @@ getDictInfo (box@(Box dict), prettyType) = do
     classNameFilt className InfoProv{..} =
         not $ takeWhile (/= '_') className `isInfixOf` ipName
 
+-- | Trace a 'SpecialistNote' to the eventlog.
+--
+-- This function should be preferred over 'traceEventIO', which
+-- can only accept a 'String'. This makes it tempting to 'show'
+-- a 'SpecialistNote', which very quickly will bump into the 64k
+-- limitation that is EVENT_PAYLOAD_SIZE_MAX.
+traceSpecialistNote :: SpecialistNote -> IO ()
+traceSpecialistNote note =
+  let enc = LBS.toStrict $ extractBase64 $ LBS.encodeBase64' $ Bin.encode note
+  in if BS.length enc < 2^(16 :: Int) then
+    Trace.traceEventIO enc
+  else
+    hPutStrLn Handles.stderr "WARNING: serialized specialist event exceeded EVENT_PAYLOAD_SIZE_MAX."
+
 {-# NOINLINE specialistWrapper' #-}
 specialistWrapper' :: forall a r (b :: TYPE r).
      Double
@@ -161,7 +189,7 @@ specialistWrapper' sampleProb hasSampledRef fIdAddr lAddr ssAddr f boxedDicts =
       coin <- (< sampleProb) <$> randomRIO @Double (0.0, 1.0)
       sampled <- atomicModifyIORef' hasSampledRef (True,)
       when (coin || not sampled) $
-        traceEventIO . show =<<
+        traceSpecialistNote =<<
           SpecialistNote (unpackCString# fIdAddr)
             <$> currentCallStack
             <*> (reverse . map fromIntegral <$> currentCallStackIds)
