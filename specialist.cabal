@@ -72,7 +72,6 @@ executable specialyze
   other-modules:
       Commands
       Commands.DictProvenance
-      Commands.FindDuplicateSpecs
       Commands.GroupNotes
   build-depends:
     , specialist
