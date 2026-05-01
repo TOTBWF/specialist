@@ -95,8 +95,6 @@ data DictClosure =
       DictClosure (Maybe InfoProv) [DictClosure]
     | DictClosureRaw
         (Maybe InfoProv)
-        -- | Shown 'GHC.Heap.Exts.Closure'
-        String
 
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass Binary
@@ -105,11 +103,11 @@ dictClosureIpe :: DictClosure -> Maybe InfoProv
 dictClosureIpe =
     \case
       DictClosure ipe    _ -> ipe
-      DictClosureRaw ipe _ -> ipe
+      DictClosureRaw ipe -> ipe
 
 dictClosureFrees :: DictClosure -> [DictClosure]
 dictClosureFrees (DictClosure _ frees) = frees
-dictClosureFrees (DictClosureRaw _ _) = []
+dictClosureFrees (DictClosureRaw _) = []
 
 dictClosureIpes :: DictClosure -> [InfoProv]
 dictClosureIpes (DictClosure mIpe frees) =
@@ -119,7 +117,7 @@ dictClosureIpes (DictClosure mIpe frees) =
       Nothing ->
         id
     $ concatMap dictClosureIpes frees
-dictClosureIpes (DictClosureRaw mIpe _) =
+dictClosureIpes (DictClosureRaw mIpe) =
     maybeToList mIpe
 
 data Dict (c :: Constraint) where

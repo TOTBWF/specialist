@@ -86,14 +86,14 @@ getDictInfo (box@(Box dict), prettyType) = do
             wf <- whereFrom dict
             frees <- go (const True) [] ptrs
             return $ DictClosure wf frees
-          closure ->
+          _ ->
             go (const True) [] [box] >>=
               \case
                 [dc] ->
                   return dc
                 _ -> do
                   wf <- whereFrom dict
-                  return (DictClosureRaw wf (show closure))
+                  return (DictClosureRaw wf)
 
     return $ DictInfo prettyType dc
   where
