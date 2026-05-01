@@ -24,7 +24,6 @@ import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Lazy.Base64 qualified as LBS
 import Data.Binary qualified as Bin
 import Data.List
-import Data.Maybe
 
 import Debug.Trace.ByteString qualified as Trace
 
@@ -46,6 +45,13 @@ dictToBox = unsafeCoerce
 mkBox :: forall a. a => Box
 mkBox = dictToBox (Dict @a)
 
+catMaybes' :: [Maybe a] -> [a]
+catMaybes' [] = []
+catMaybes' (Nothing:xs) = catMaybes' xs
+catMaybes' (Just x:xs) =
+  let !rest = catMaybes' xs
+  in x:rest
+
 -- | Traverse free variables of a dictionary to determine the superclasses. For
 -- some reason, the references to superclass dictionaries (sometimes?) go
 -- through the class functions, so we need to follow references through the
@@ -64,19 +70,19 @@ getDictInfo (box@(Box dict), prettyType) = do
         \case
           ConstrClosure _ ptrs _ _ _ dcon_nm | 'C':':':cls_nm <- dcon_nm -> do
             wf <- whereFrom dict
-            frees <- catMaybes <$> mapM (go (classNameFilt cls_nm)) ptrs
+            frees <- evaluate =<< catMaybes' <$> mapM (go (classNameFilt cls_nm)) ptrs
             return $ DictClosure wf frees
           FunClosure _ ptrs _ -> do
             -- Assume this is a single method dictionary, which is actually just
             -- the function
             wf <- whereFrom dict
-            frees <- catMaybes <$> mapM (go (const True)) ptrs
+            frees <- evaluate =<< catMaybes' <$> mapM (go (const True)) ptrs
             return $ DictClosure wf frees
           ThunkClosure _ ptrs _ -> do
             -- TODO: For some reason, some dictionaries are showing up as
             -- thunks. If we force them, I think some will show up as PAPs?
             wf <- whereFrom dict
-            frees <- catMaybes <$> mapM (go (const True)) ptrs
+            frees <- evaluate =<< catMaybes' <$> mapM (go (const True)) ptrs
             return $ DictClosure wf frees
           closure ->
             go (const True) box >>=
@@ -95,7 +101,7 @@ getDictInfo (box@(Box dict), prettyType) = do
         \case
           ConstrClosure _ ptrs _ _ _ dcon_nm | 'C':':':cls_nm <- dcon_nm -> do
             wf <- whereFrom d
-            frees <- catMaybes <$> mapM (go (classNameFilt cls_nm)) ptrs
+            frees <- evaluate =<< catMaybes' <$> mapM (go (classNameFilt cls_nm)) ptrs
             return $ Just (DictClosure wf frees)
           FunClosure _ ptrs _ -> do
             -- Assume this is a single method dictionary, which is actually just
@@ -114,7 +120,7 @@ getDictInfo (box@(Box dict), prettyType) = do
             -- those too.
             wf <- whereFrom d
             if maybe True ipeFilt wf then do
-              frees <- catMaybes <$> mapM (go (const True)) ptrs
+              frees <- evaluate =<< catMaybes' <$> mapM (go (const True)) ptrs
               return $ Just (DictClosure wf frees)
             else do
               return Nothing
@@ -167,12 +173,13 @@ getDictInfo (box@(Box dict), prettyType) = do
 -- a 'SpecialistNote', which very quickly will bump into the 64k
 -- limitation that is EVENT_PAYLOAD_SIZE_MAX.
 traceSpecialistNote :: SpecialistNote -> IO ()
-traceSpecialistNote note =
-  let enc = LBS.toStrict $ extractBase64 $ LBS.encodeBase64' $ Bin.encode note
-  in if BS.length enc < 2^(16 :: Int) then
+traceSpecialistNote note = do
+  enc <- evaluate $ LBS.toStrict $ extractBase64 $ LBS.encodeBase64' $ Bin.encode note
+  let len = BS.length enc
+  if len < 2^(16 :: Int) then
     Trace.traceEventIO enc
   else
-    hPutStrLn Handles.stderr "WARNING: serialized specialist event exceeded EVENT_PAYLOAD_SIZE_MAX."
+    hPutStrLn Handles.stderr $ "WARNING: serialized specialist event exceeded EVENT_PAYLOAD_SIZE_MAX: " <> show len <> " bytes"
 
 {-# NOINLINE specialistWrapper' #-}
 specialistWrapper' :: forall a r (b :: TYPE r).
