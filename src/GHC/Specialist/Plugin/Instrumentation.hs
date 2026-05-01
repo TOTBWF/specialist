@@ -70,39 +70,41 @@ getDictInfo (box@(Box dict), prettyType) = do
         \case
           ConstrClosure _ ptrs _ _ _ dcon_nm | 'C':':':cls_nm <- dcon_nm -> do
             wf <- whereFrom dict
-            frees <- evaluate =<< catMaybes' <$> mapM (go (classNameFilt cls_nm)) ptrs
+            frees <- go (classNameFilt cls_nm) [] ptrs
+              -- go (classNameFilt cls_nm) ptrs _
+              -- evaluate =<< catMaybes' <$> mapM (go (classNameFilt cls_nm)) ptrs
             return $ DictClosure wf frees
           FunClosure _ ptrs _ -> do
             -- Assume this is a single method dictionary, which is actually just
             -- the function
             wf <- whereFrom dict
-            frees <- evaluate =<< catMaybes' <$> mapM (go (const True)) ptrs
+            frees <- go (const True) [] ptrs
             return $ DictClosure wf frees
           ThunkClosure _ ptrs _ -> do
             -- TODO: For some reason, some dictionaries are showing up as
             -- thunks. If we force them, I think some will show up as PAPs?
             wf <- whereFrom dict
-            frees <- evaluate =<< catMaybes' <$> mapM (go (const True)) ptrs
+            frees <- go (const True) [] ptrs
             return $ DictClosure wf frees
           closure ->
-            go (const True) box >>=
+            go (const True) [] [box] >>=
               \case
-                Just dc ->
+                [dc] ->
                   return dc
-                Nothing -> do
+                _ -> do
                   wf <- whereFrom dict
                   return (DictClosureRaw wf (show closure))
 
     return $ DictInfo prettyType dc
   where
-    go :: (InfoProv -> Bool) -> Box -> IO (Maybe DictClosure)
-    go ipeFilt (Box d) =
-      getClosureData d >>=
-        \case
+    go :: (InfoProv -> Bool) -> [DictClosure] -> [Box] -> IO [DictClosure]
+    go _ipeFilt acc [] = pure acc
+    go ipeFilt acc (Box d:rest) =
+      getClosureData d >>= \case
           ConstrClosure _ ptrs _ _ _ dcon_nm | 'C':':':cls_nm <- dcon_nm -> do
             wf <- whereFrom d
-            frees <- evaluate =<< catMaybes' <$> mapM (go (classNameFilt cls_nm)) ptrs
-            return $ Just (DictClosure wf frees)
+            frees <- go (classNameFilt cls_nm) [] ptrs
+            go ipeFilt (DictClosure wf frees:acc) rest
           FunClosure _ ptrs _ -> do
             -- Assume this is a single method dictionary, which is actually just
             -- the function
@@ -120,29 +122,23 @@ getDictInfo (box@(Box dict), prettyType) = do
             -- those too.
             wf <- whereFrom d
             if maybe True ipeFilt wf then do
-              frees <- evaluate =<< catMaybes' <$> mapM (go (const True)) ptrs
-              return $ Just (DictClosure wf frees)
-            else do
-              return Nothing
+              frees <- go (const True) [] ptrs
+              go ipeFilt (DictClosure wf frees:acc) rest
+            else
+              go ipeFilt acc rest
           IndClosure _ ptr -> do
             -- Go straight through indirections
             --
             -- I believe this can happen if, e.g., a dictionary is given a cost
             -- center with -fprof-late.
-            go ipeFilt ptr
-          PAPClosure _ _ _ _ptrs _ -> do
-            -- TODO: For some reason, some dictionaries were showing up as
-            -- PAPs... no idea why. This was happening before I added the thunk
-            -- closures back and stopped forcing the dict to WHNF, maybe they
-            -- were resulting from forced dicts?
-            return Nothing
+            go ipeFilt acc (ptr:rest)
           BlackholeClosure _ ind -> do
             -- Blackholes can be updated to point to indirections, if things are
             -- timed just right. See Note [BLACKHOLE pointing to IND] in GHC.
             ind_cd <- getClosureData ind
             case ind_cd of
               IndClosure _ ptr ->
-                go ipeFilt ptr
+                go ipeFilt acc (ptr:rest)
               _ ->
                 -- TODO: When the plugin is enabled on the Cabal-syntax library,
                 -- and we run the cabal hackage-test parsec test, we see many
@@ -151,10 +147,9 @@ getDictInfo (box@(Box dict), prettyType) = do
                 -- workaround I added this retry loop (instead of `return
                 -- Nothing`) and it fixed it. Definitely worth keeping in mind,
                 -- in case this ends up biting us later.
-                let !d' = d in go ipeFilt (Box d')
-                -- return Nothing
+                let !d' = d in go ipeFilt acc (Box d':rest)
           _c -> do
-            return Nothing
+            go ipeFilt acc rest
 
     -- If the class name of this closure is found in ptr closures, assume it is
     -- actually a class function, not a superclass
