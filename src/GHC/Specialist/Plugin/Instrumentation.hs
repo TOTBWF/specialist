@@ -71,8 +71,6 @@ getDictInfo (box@(Box dict), prettyType) = do
           ConstrClosure _ ptrs _ _ _ dcon_nm | 'C':':':cls_nm <- dcon_nm -> do
             wf <- whereFrom dict
             frees <- go (classNameFilt cls_nm) [] ptrs
-              -- go (classNameFilt cls_nm) ptrs _
-              -- evaluate =<< catMaybes' <$> mapM (go (classNameFilt cls_nm)) ptrs
             return $ DictClosure wf frees
           FunClosure _ ptrs _ -> do
             -- Assume this is a single method dictionary, which is actually just
@@ -101,11 +99,11 @@ getDictInfo (box@(Box dict), prettyType) = do
     go _ipeFilt acc [] = pure acc
     go ipeFilt acc (Box d:rest) =
       getClosureData d >>= \case
-          ConstrClosure _ ptrs _ _ _ dcon_nm | 'C':':':cls_nm <- dcon_nm -> do
+          ConstrClosure _ ptrs _ _ _ dcon_nm | 'C':':':cls_nm <- dcon_nm -> {-# "go.ConstrClosure" #-} do
             wf <- whereFrom d
             frees <- go (classNameFilt cls_nm) [] ptrs
             go ipeFilt (DictClosure wf frees:acc) rest
-          FunClosure _ ptrs _ -> do
+          FunClosure _ ptrs _ -> {-# "go.FunClosure" #-} do
             -- Assume this is a single method dictionary, which is actually just
             -- the function
             --
@@ -126,13 +124,13 @@ getDictInfo (box@(Box dict), prettyType) = do
               go ipeFilt (DictClosure wf frees:acc) rest
             else
               go ipeFilt acc rest
-          IndClosure _ ptr -> do
+          IndClosure _ ptr -> {-# "go.IndClosure" #-} do
             -- Go straight through indirections
             --
             -- I believe this can happen if, e.g., a dictionary is given a cost
             -- center with -fprof-late.
             go ipeFilt acc (ptr:rest)
-          BlackholeClosure _ ind -> do
+          BlackholeClosure _ ind -> {-# SCC "go.BlackholeClosure" #-} do
             -- Blackholes can be updated to point to indirections, if things are
             -- timed just right. See Note [BLACKHOLE pointing to IND] in GHC.
             ind_cd <- getClosureData ind
@@ -148,7 +146,7 @@ getDictInfo (box@(Box dict), prettyType) = do
                 -- Nothing`) and it fixed it. Definitely worth keeping in mind,
                 -- in case this ends up biting us later.
                 let !d' = d in go ipeFilt acc (Box d':rest)
-          _c -> do
+          _c -> {-# SCC "go.OtherClosure" #-} do
             go ipeFilt acc rest
 
     -- If the class name of this closure is found in ptr closures, assume it is
